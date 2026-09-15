@@ -3,6 +3,8 @@ using ChronoBlade.Gameplay;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
 
 namespace ProjectBootstrap
@@ -125,7 +127,20 @@ namespace ProjectBootstrap
             {
                 mainCamera.transform.position = new Vector3(0f, 0f, -10f);
                 var cam = mainCamera.GetComponent<Camera>();
-                if (cam != null) { cam.orthographic = true; cam.orthographicSize = 6f; }
+                if (cam != null)
+                {
+                    cam.orthographic = true;
+                    cam.orthographicSize = 6f;
+                    cam.clearFlags = CameraClearFlags.SolidColor;
+                    cam.backgroundColor = new Color(0.04f, 0.03f, 0.09f); // dark indigo, not flat black
+                    cam.allowHDR = true;
+                }
+
+                var camData = mainCamera.GetComponent<UniversalAdditionalCameraData>();
+                if (camData != null) camData.renderPostProcessing = true;
+
+                foreach (var old in mainCamera.GetComponents<CameraFollow>()) Object.DestroyImmediate(old);
+                mainCamera.AddComponent<CameraFollow>();
             }
 
             // --- Player ---
@@ -135,7 +150,7 @@ namespace ProjectBootstrap
 
             var playerSr = player.AddComponent<SpriteRenderer>();
             playerSr.sprite = ProceduralSprite.Square();
-            playerSr.color = new Color(0.2f, 0.6f, 1f);
+            playerSr.color = new Color(0.35f, 1.1f, 1.9f); // HDR-bright so Bloom glows it
 
             var playerRb = player.AddComponent<Rigidbody2D>();
             playerRb.gravityScale = 0f;
@@ -143,6 +158,9 @@ namespace ProjectBootstrap
 
             player.AddComponent<CircleCollider2D>();
             player.AddComponent<PlayerController>();
+
+            var followCam = mainCamera != null ? mainCamera.GetComponent<CameraFollow>() : null;
+            if (followCam != null) followCam.target = player.transform;
 
             // --- Time economy ---
             var economyGo = new GameObject("TimeEconomy");
@@ -168,8 +186,60 @@ namespace ProjectBootstrap
             runManager.altarPool.Add(siegaNode);
             runManager.altarPool.Add(premuraNode);
 
+            SetupPostProcessing();
+
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
+        }
+
+        // Adds a VolumeComponent to the profile AND registers it as a persistent sub-asset —
+        // VolumeProfile.Add<T>() alone only lives in memory; without AddObjectToAsset it does
+        // not survive a save/reload (which is why it silently vanished by Play mode).
+        static T GetOrAddVolumeComponent<T>(VolumeProfile profile) where T : VolumeComponent
+        {
+            if (profile.TryGet<T>(out T existing)) return existing;
+
+            var component = profile.Add<T>(true);
+            AssetDatabase.AddObjectToAsset(component, profile);
+            return component;
+        }
+
+        static void SetupPostProcessing()
+        {
+            // Always rebuilt fresh (like the scene) rather than loaded-if-exists: a VolumeProfile
+            // that already has sub-assets AddObjectToAsset'd into it is fragile to touch again
+            // across separate batch invocations, so don't risk a stale/orphaned reference.
+            const string profilePath = DataFolder + "/PostProcessProfile.asset";
+            AssetDatabase.DeleteAsset(profilePath);
+
+            var profile = ScriptableObject.CreateInstance<VolumeProfile>();
+            AssetDatabase.CreateAsset(profile, profilePath);
+
+            var bloom = GetOrAddVolumeComponent<Bloom>(profile);
+            bloom.threshold.overrideState = true; bloom.threshold.value = 1f;
+            bloom.intensity.overrideState = true; bloom.intensity.value = 1.4f;
+            bloom.scatter.overrideState = true; bloom.scatter.value = 0.7f;
+
+            var vignette = GetOrAddVolumeComponent<Vignette>(profile);
+            vignette.intensity.overrideState = true; vignette.intensity.value = 0.35f;
+            vignette.smoothness.overrideState = true; vignette.smoothness.value = 0.6f;
+            vignette.color.overrideState = true; vignette.color.value = new Color(0.02f, 0f, 0.05f);
+
+            var colorAdjustments = GetOrAddVolumeComponent<ColorAdjustments>(profile);
+            colorAdjustments.saturation.overrideState = true; colorAdjustments.saturation.value = 15f;
+            colorAdjustments.contrast.overrideState = true; colorAdjustments.contrast.value = 12f;
+
+            EditorUtility.SetDirty(profile);
+            AssetDatabase.SaveAssets();
+
+            var existingVolumeGo = GameObject.Find("GlobalPostProcess");
+            if (existingVolumeGo != null) Object.DestroyImmediate(existingVolumeGo);
+
+            var volumeGo = new GameObject("GlobalPostProcess");
+            var volume = volumeGo.AddComponent<Volume>();
+            volume.isGlobal = true;
+            volume.weight = 1f;
+            volume.sharedProfile = profile; // .profile is a runtime-only copy; this is what serializes
         }
     }
 }

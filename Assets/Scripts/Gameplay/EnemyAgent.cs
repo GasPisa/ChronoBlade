@@ -47,6 +47,8 @@ namespace ChronoBlade.Gameplay
 
         public void Kill()
         {
+            var sr = GetComponent<SpriteRenderer>();
+            DeathBurst.Spawn(transform.position, sr != null ? sr.color : Color.white);
             RunManager.Instance?.RegisterKill(definition);
             Destroy(gameObject);
         }

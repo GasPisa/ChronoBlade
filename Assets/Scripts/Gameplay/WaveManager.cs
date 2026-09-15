@@ -70,14 +70,15 @@ namespace ChronoBlade.Gameplay
             if (_aliveCount <= 0) RunManager.Instance.OnWaveCleared();
         }
 
+        // HDR-bright (values above 1) so URP Bloom makes them glow instead of sitting flat.
         static Color ColorForArchetype(EnemyArchetype archetype)
         {
             switch (archetype)
             {
-                case EnemyArchetype.Fodder: return new Color(0.8f, 0.8f, 0.8f);
-                case EnemyArchetype.Tank: return new Color(0.6f, 0.2f, 0.2f);
-                case EnemyArchetype.Fast: return new Color(0.9f, 0.9f, 0.2f);
-                case EnemyArchetype.Elite: return new Color(0.7f, 0.1f, 0.9f);
+                case EnemyArchetype.Fodder: return new Color(1.1f, 1.1f, 1.3f);
+                case EnemyArchetype.Tank: return new Color(1.6f, 0.25f, 0.25f);
+                case EnemyArchetype.Fast: return new Color(1.6f, 1.6f, 0.2f);
+                case EnemyArchetype.Elite: return new Color(1.4f, 0.15f, 1.6f);
                 default: return Color.white;
             }
         }

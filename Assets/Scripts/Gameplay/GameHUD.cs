@@ -10,9 +10,11 @@ namespace ChronoBlade.Gameplay
     public class GameHUD : MonoBehaviour
     {
         const float FlashDuration = 0.25f;
+        const float AutoRestartDelay = 8f; // unattended booth demo: reset without staff intervention
 
         TimeEconomyController _economy;
         float _flashTimer;
+        float _completeTimer;
 
         void Awake()
         {
@@ -64,10 +66,15 @@ namespace ChronoBlade.Gameplay
             }
             else if (run.Phase == RunPhase.Complete)
             {
-                if (keyboard.rKey.wasPressedThisFrame)
+                _completeTimer += Time.deltaTime;
+                if (keyboard.rKey.wasPressedThisFrame || _completeTimer >= AutoRestartDelay)
                 {
                     SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
                 }
+            }
+            else
+            {
+                _completeTimer = 0f;
             }
         }
 
@@ -202,6 +209,15 @@ namespace ChronoBlade.Gameplay
             };
             GUI.Label(new Rect(0, Screen.height / 2f + 10, Screen.width, 40),
                 $"Reached wave {run.WaveNumber} — {run.KillCount} kills — press R to restart", restartStyle);
+
+            var timerStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 14,
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = new Color(1f, 1f, 1f, 0.5f) }
+            };
+            GUI.Label(new Rect(0, Screen.height / 2f + 55, Screen.width, 30),
+                $"(auto-restart in {Mathf.Max(0f, AutoRestartDelay - _completeTimer):F0}s)", timerStyle);
         }
     }
 }
